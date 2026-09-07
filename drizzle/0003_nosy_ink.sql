@@ -1,0 +1,2 @@
+CREATE UNIQUE INDEX `drawings_customer_spec_version_unique` ON `drawings` (`customer_id`,`spec_id`,`number`,`version`);--> statement-breakpoint
+CREATE UNIQUE INDEX `work_orders_intake_unique` ON `work_orders` (`intake_id`);

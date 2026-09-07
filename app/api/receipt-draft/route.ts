@@ -1,0 +1,7 @@
+import {database} from '@/db/raw';
+import {z} from 'zod';
+const str=z.string().max(200);
+const count=z.union([z.string().max(30),z.number().finite()]);
+export const receiptDraftSchema=z.object({request_id:z.string().uuid(),customer_id:str,supplier_id:str,date:str,number:str,note:z.string().max(2000),barrels:count,barrels_manual:z.boolean().optional(),lines:z.array(z.object({key:str,spec_id:str,drawing_id:str,quantity:count,packages:count,package_unit:z.enum(['包','桶']),fee:count,due:str})).max(100)});
+export async function GET(){try{const r=await database().prepare("SELECT data,updated_at FROM material_drafts WHERE id='receipt'").first<{data:string;updated_at:string}>();return Response.json({draft:r?{data:JSON.parse(r.data),updated_at:r.updated_at}:null},{headers:{'Cache-Control':'no-store'}})}catch{return Response.json({error:'草稿無法讀取，請重試'},{status:503})}}
+export async function POST(req:Request){try{if(req.headers.get('origin')&&req.headers.get('origin')!==new URL(req.url).origin)return Response.json({error:'請從本站操作'},{status:403});const p=receiptDraftSchema.parse(await req.json());const stamp=new Date().toISOString();await database(req).prepare("INSERT INTO material_drafts (id,data,updated_at) VALUES ('receipt',?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data,updated_at=excluded.updated_at").bind(JSON.stringify(p),stamp).run();return Response.json({ok:true,updated_at:stamp})}catch{return Response.json({error:'草稿儲存失敗，請檢查欄位並重試'},{status:400})}}

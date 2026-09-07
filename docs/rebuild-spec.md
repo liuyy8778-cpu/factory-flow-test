@@ -4,7 +4,7 @@
 來源：`liuyy8778-cpu/factory-flow`（廠務帳 V20，Sites / Cloudflare Workers / D1 / R2）
 目標：在一台電腦上以 Node.js 執行，資料全部存在本機硬碟，不依賴任何雲端服務。
 
-這份文件是「動工前的盤點」。確認後才開始寫程式。
+這份文件是「動工前的盤點」。2026-09-07 已依此完成第一版，實作差異見文末「實作備註」。
 
 ---
 
@@ -43,7 +43,7 @@
 
 完整欄位定義見 `db/schema.ts`，migration 見 `drizzle/0000` 到 `0011`。
 
-**關鍵事實**：有 51 個 SQLite trigger 只存在 migration 裡，不在 schema 檔：
+**關鍵事實**：有 60 個 SQLite trigger 只存在 migration 裡，不在 schema 檔：
 
 - 0009：防止同客戶同圖號同版本透過共用來料重複建圖
 - 0010：圖面一旦被引用就標記 `used=1`，不可回退
@@ -175,8 +175,8 @@ npm run start    正式執行
   data/
     factory.db        SQLite 資料庫，所有帳務與稽核
     files/            圖檔附件，沿用原 key 結構 drawings/{id}/{uuid}
-    backups/          一鍵備份輸出位置
   .env                路徑與設定
+  備份/                一鍵備份預設輸出位置（可用 .env 改到外接硬碟）
 ```
 
 `data/` 整個資料夾寫進 `.gitignore`，營運資料永遠不推上 GitHub。
@@ -188,7 +188,7 @@ npm run start    正式執行
 - 套件：`better-sqlite3`。Node 22 內建的 `node:sqlite` 仍是實驗性，正式執行不用。
 - 做法：寫一個 `db/local.ts`，提供與 D1 相同的介面：`prepare(sql).bind(...).run() / .all() / .first()`、`batch([...])`。`batch` 內部用 `transaction()` 包起來，回傳每條的 `meta.changes`。
 - 效果：所有 route 檔案的 SQL 一行不改。原本的 `json_each`、`RETURNING`、`PRAGMA`、`rowid`、部分唯一索引，better-sqlite3 全部支援。
-- Migration：啟動時依 `drizzle/meta/_journal.json` 順序執行尚未套用的 `.sql`，用一張 `__migrations` 表記錄。51 個 trigger 隨之建立。
+- Migration：啟動時依 `drizzle/meta/_journal.json` 順序執行尚未套用的 `.sql`，用一張 `__migrations` 表記錄。60 個 trigger 隨之建立。
 - 稽核 actor：`db/audited.ts` 的 Proxy 邏輯保留，改包在同一個 transaction 內，比 D1 更安全。
 - 設定：`PRAGMA journal_mode=WAL`、`PRAGMA foreign_keys=ON`。
 
@@ -203,10 +203,9 @@ npm run start    正式執行
 
 - 單機版不做密碼登入。
 - 第一次開啟時顯示「選擇操作人員」畫面，名字存 cookie。
-- 一個 `middleware.ts` 讀 cookie，轉成 `oai-authenticated-user-id` 與 `-email` 兩個內部 header。
+- 一個 `proxy.ts`（Next 16 的 middleware）讀 cookie，轉成 `oai-authenticated-user-id` 與 `-email` 兩個內部 header。
 - 效果：原本所有登入守門（換料、圖面編輯、備份、復原）**一行不改**就能過，稽核從第一天記人名。
 - 未來上線只需把「讀 cookie」換成「驗證 session」，其餘不動。這就是前面說的「留位子」。
-- `.env` 加 `AUTH_MODE=local`，之後可切成 `session`。
 
 **地基 4：建置與啟動**
 
@@ -235,7 +234,7 @@ npm run start    正式執行
 ### 階段 0：地基
 
 - 建立 Next.js 專案骨架，搬入 `db/schema.ts`、`drizzle/`、`app/globals.css`、必要的 13 個 UI 元件。
-- 寫 `db/local.ts` adapter、migration runner、`storage/`、`middleware.ts`、操作人員畫面。
+- 寫 `db/local.ts` adapter、migration runner、`storage/`、`proxy.ts`、操作人員畫面。
 - 把 `tests/production-flow.test.mjs` 改接本機 adapter，17 個流程測試全綠。
 - 驗收標準：空資料庫啟動、選人、看到空的作業總覽。
 
@@ -300,7 +299,7 @@ npm run start    正式執行
 |---|---|
 | 原封搬入 | `db/schema.ts`、`drizzle/**`、`app/api/**`（改 import 路徑）、`app/*.tsx`、`app/*.ts`（除 chatgpt-auth）、`app/globals.css`、`tests/*.test.mjs`、`scripts/backup-restore-source.mjs`、`scripts/build-backup-tool.mjs`、`public/favicon.svg` |
 | 改寫 | `db/index.ts`、`db/raw.ts`、`db/audited.ts`、`app/api/drawing-file/route.ts`、`app/api/backup/route.ts`（改用 storage 介面）、`next.config.ts`、`package.json` |
-| 新增 | `db/local.ts`、`db/migrate.ts`、`storage/index.ts`、`storage/local.ts`、`middleware.ts`、`app/operator/page.tsx`、`.env.example`、`scripts/import-attachments.mjs`、`scripts/backup-to-folder.mjs` |
+| 新增 | `db/local.ts`、`db/migrate.ts`、`storage/index.ts`、`storage/local.ts`、`proxy.ts`、`app/operator/page.tsx`、`.env.example`、`scripts/import-attachments.mjs`、`scripts/backup-to-folder.mjs` |
 | 刪除 | `worker/`、`build/`、`.openai/`、`vite.config.ts`、`vercel.json`、`scripts/*.sh`、`app/chatgpt-auth.ts`、`examples/`、`preview/`、`backups/`、`worker-configuration.d.ts`、未用的 47 個 shadcn 元件、`recharts` |
 
 ## 附錄 B：套件變動
@@ -308,3 +307,14 @@ npm run start    正式執行
 移除：`vinext`、`wrangler`、`@cloudflare/vite-plugin`、`@vitejs/*`、`vite`、`recharts`、`react-server-dom-webpack`
 新增：`better-sqlite3`、`@types/better-sqlite3`
 保留：`next`、`react`、`react-dom`、`drizzle-orm`、`drizzle-kit`、`zod`、`tailwindcss`、`@tailwindcss/postcss`、`lucide-react`、`sonner`、`clsx`、`tailwind-merge`、`class-variance-authority`、`radix-ui`、`@base-ui/react`、`cmdk`、`date-fns`、`next-themes`
+
+---
+
+## 附錄 C：實作備註（2026-09-07 完成第一版）
+
+- 四階段在同一次完成，因為畫面與 API 是整套原樣搬入，拆階段反而多工。
+- Next 16 的 middleware 檔名是 `proxy.ts`，不是 `middleware.ts`。
+- trigger 實際數量是 60 個（0009 有 2 個、0010 有 7 個、0011 有 51 個），測試會核對這個數字。
+- 操作人員名字含中文，HTTP header 不能直接放，所以 `proxy.ts` 用百分號編碼寫入 header，四個讀取端解碼。
+- 一鍵備份做成 `/api/local-backup` 與「備份與復原」頁的按鈕，也可用 `npm run backup` 從指令列執行。
+- 測試 28 個全數通過，其中 17 個是原系統的完整流程測試，直接跑在本機 adapter 的相容介面上。

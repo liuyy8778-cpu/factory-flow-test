@@ -1,0 +1,1 @@
+ALTER TABLE `intakes` ADD `position` integer DEFAULT 0 NOT NULL;

@@ -1,0 +1,20 @@
+import {GrooveFields} from './groove-fields';
+import {grooveSummary} from './groove-types';
+import SocketDiagram from './socket-diagram';
+import {Input} from '@/components/ui/input';
+import {Select,SelectTrigger,SelectValue,SelectContent,SelectItem} from '@/components/ui/select';
+import {Table,TableHeader,TableBody,TableRow,TableHead,TableCell} from '@/components/ui/table';
+import {editDrawing,blankEnd,type EndCut} from './drawing-types';
+type Row=Record<string,any>;
+export function DrawingFields({value,onChange,raw,names=[]}:{value:Row;onChange:(d:Row)=>void;raw?:Row;names?:string[]}){
+ const d=editDrawing(value);
+ const changeEnd=(key:'drive'|'work',patch:Partial<EndCut>)=>onChange({...d,ends:{...d.ends,[key]:{...d.ends[key],...patch}}});
+ return <section className="drawing-end-fields">
+ {!!value.diameter&&value.format!=='ends-v1'&&<p className="production-hint">舊圖外徑 Ø{value.diameter}，未記錄端別。請依圖面分別確認兩端，不會自動套入。</p>}
+ <div className="form-grid">{[['length','加工後總長（mm）'],['length_tolerance','總長公差']].map(([k,label])=><label className="field" key={k}><span>{label} *</span><Input required inputMode={k==='length'?'decimal':'text'} value={d[k as 'length'|'length_tolerance']} onChange={e=>onChange({...d,[k]:e.target.value})}/></label>)}</div>
+ <p>兩端加工長度各自從該端面往內量，與整支完成總長分開記錄。尺寸單位：mm。</p>
+ <div className="drawing-end-grid">{(['drive','work'] as const).map(key=>{const e=d.ends[key],label=key==='drive'?`方孔端（${raw?.drive||'例如 1/2'} 那端）`:`工作端（${raw?.size||'例如 M10'} 那端）`;return <fieldset key={key}><legend>{label}</legend><Select value={e.mode} onValueChange={mode=>changeEnd(key,{...blankEnd(),mode:mode as EndCut['mode']})}><SelectTrigger aria-label={label+'加工狀態'}><SelectValue/></SelectTrigger><SelectContent><SelectItem value="pending">待確認</SelectItem><SelectItem value="machine">加工</SelectItem><SelectItem value="unchanged">不加工，保留來料</SelectItem></SelectContent></Select>{e.mode==='machine'?<div className="form-grid">{[['diameter','加工後外徑','例如 15.5'],['diameter_tolerance','外徑公差','依圖面'],['cut_length','外徑加工長度','例如 19'],['cut_length_tolerance','加工長度公差','依圖面']].map(([k,title,placeholder])=><label className="field" key={k}><span>{title} *</span><Input required aria-label={label+title} inputMode={k.includes('tolerance')?'text':'decimal'} value={e[k as keyof EndCut]} placeholder={placeholder} onChange={ev=>changeEnd(key,{[k]:ev.target.value})}/></label>)}</div>:<p>{e.mode==='pending'?'可先存圖面，確認兩端後另存版本供派工使用。':'此端不車外徑，加工尺寸不需填寫。'}</p>}</fieldset>})}</div>
+ <label className="field"><span>車修代號（選填；F＝車修雙頭）</span><Input maxLength={50} value={d.operation_code||''} onChange={e=>onChange({...d,operation_code:e.target.value})}/></label><GrooveFields value={d.groove} onChange={groove=>onChange({...d,groove})} length={d.length} names={names}/><SocketDiagram drawing={d} raw={raw}/>
+ </section>
+}
+export function DrawingDimensions({drawing:d,raw}:{drawing:Row|null|undefined;raw?:Row}){if(!d)return <p>尚未指定加工圖面</p>;return <><p>來料：Ø{raw?.raw_diameter||'—'} × {raw?.raw_length||'—'}L</p><Table><TableHeader><TableRow>{['部位／尺寸','加工後外徑','外徑公差','加工長度／總長','長度公差'].map(t=><TableHead key={t}>{t}</TableHead>)}</TableRow></TableHeader><TableBody><TableRow><TableCell>整支完成總長</TableCell><TableCell>—</TableCell><TableCell>—</TableCell><TableCell>{d?.length||'待確認'} mm</TableCell><TableCell>{d?.length_tolerance||'—'}</TableCell></TableRow>{d?.format==='ends-v1'?(['drive','work'] as const).map(key=>{const e=d.ends[key];return <TableRow key={key}><TableCell>{key==='drive'?`方孔端 ${raw?.drive||''}`:`工作端 ${raw?.size||''}`}</TableCell>{e.mode==='machine'?<><TableCell>Ø{e.diameter} mm</TableCell><TableCell>{e.diameter_tolerance}</TableCell><TableCell>從該端面往內 {e.cut_length} mm</TableCell><TableCell>{e.cut_length_tolerance}</TableCell></>:<TableCell colSpan={4}>{e.mode==='unchanged'?'不加工（保留來料）':'待確認'}</TableCell>}</TableRow>}):<TableRow><TableCell>舊圖外徑（端別未記錄）</TableCell><TableCell>{d?.diameter?`Ø${d.diameter} mm`:'待確認'}</TableCell><TableCell>{d?.diameter_tolerance||'—'}</TableCell><TableCell>未記錄</TableCell><TableCell>—</TableCell></TableRow>}</TableBody></Table><p>{grooveSummary(d?.groove)}</p><SocketDiagram drawing={d} raw={raw}/></>}

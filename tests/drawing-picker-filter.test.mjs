@@ -1,0 +1,12 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {build} from 'esbuild';
+const compiled=await build({entryPoints:['app/drawing-picker-filter.ts'],bundle:true,platform:'node',format:'esm',write:false});
+const {emptyDrawingPicker,selectDrawingMaterials,sizeKey}=await import('data:text/javascript;base64,'+Buffer.from(compiled.outputFiles[0].text).toString('base64'));
+const spec=(id,size,od='22',length='40')=>({id,code:id,data:{material:'50BV30',name:'RS-短套',drive:'1/2',size,profile:'6P',raw_diameter:od,raw_length:length,style:'一般品'}});
+const specs=[spec('a','M10'),spec('b','M11','23.5'),spec('c','M12','24','45'),spec('d','5/16'),spec('e','1-1/4'),spec('f','1-3/8')];
+const select=(f,drawings=[],customer='c1')=>selectDrawingMaterials(specs,drawings,customer,f,'').map(s=>s.id);
+test('combined size and decimal dimensions filter inclusively',()=>{const f=emptyDrawingPicker();f.catalog.series='metric';f.sizeMode='range';f.from='M10';f.to='M12';f.diameter={op:'ge',value:'23.5',end:''};f.length={op:'eq',value:'40',end:''};assert.deepEqual(select(f),['b']);f.from='M13';assert.deepEqual(select(f),[])});
+test('imperial range compares fractional sizes numerically',()=>{const f=emptyDrawingPicker();f.catalog.series='imperial';f.sizeMode='range';f.from='5/16';f.to='1-1/4';assert.deepEqual(select(f),['d','e']);f.to='';assert.deepEqual(select(f),[])});
+test('drawing status includes shared mappings only for chosen customer',()=>{const f=emptyDrawingPicker();f.drawing='existing';const d=[{customer_id:'c1',spec_id:'a',spec_ids:['a','b']},{customer_id:'c2',spec_id:'c'}];assert.deepEqual(select(f,d),['a','b']);assert.deepEqual(select(f,d,''),[]);f.drawing='missing';assert.ok(select(f,d).includes('c'));assert.ok(!select(f,d).includes('b'))});
+test('multiple sizes normalize metric spelling and retain series identity',()=>{assert.equal(sizeKey(spec('a','M10')),sizeKey(spec('b','10')));assert.notEqual(sizeKey(spec('a','M10')),sizeKey(spec('b','H10')));const f=emptyDrawingPicker();f.sizeMode='multiple';f.sizes=[sizeKey(specs[0]),sizeKey(specs[2])];assert.deepEqual(select(f),['a','c'])});

@@ -1,0 +1,18 @@
+import {materialKey,materialCode,searchCode,type Material} from './material-types';
+export type CatalogSpec={id:string;code:string;legacy_code?:string;data:Material};
+export type FilterKey='series'|'drive'|'raw_diameter'|'raw_length'|'profile'|'material'|'name'|'style';
+export type CatalogFilters=Record<FilterKey,string>;
+export const emptyFilters:CatalogFilters={series:'',drive:'',raw_diameter:'',raw_length:'',profile:'',material:'',name:'',style:''};
+export const seriesLabels:Record<string,string>={metric:'公制',imperial:'英制',bit:'BIT',e:'E型',other:'其他'};
+export function seriesOf(m:Material){const size=m.size.trim().toUpperCase();if(/^H\d/.test(size)||/BIT/i.test(m.name))return 'bit';if(/^E\d/.test(size))return 'e';if(size.includes('/')||m.name.includes('英制'))return 'imperial';if(/^(M)?\d+$/.test(size))return 'metric';return 'other'}
+export function filterValue(m:Material,key:FilterKey){if(key==='series')return seriesOf(m);const normalized=JSON.parse(materialKey(m)) as string[];return normalized[({material:0,name:1,drive:2,profile:4,raw_length:5,raw_diameter:6,style:7} as const)[key]]}
+export function fractionNumber(s:string){const a=s.match(/^(?:(\d+)[- ]+)?(\d+)\/(\d+)$/);return a?Number(a[1]||0)+Number(a[2])/Number(a[3]):Number(s.replace(/^[MHE]/i,''))}
+const collator=new Intl.Collator('zh-TW',{numeric:true,sensitivity:'base'});
+export function optionValues(specs:CatalogSpec[],key:FilterKey){const options=new Map<string,string>();for(const s of specs){const v=filterValue(s.data,key);if(!v||v==='NaN')continue;let label=key==='series'?seriesLabels[v]:key==='profile'?v:s.data[key].trim();if(key==='raw_diameter'||key==='raw_length')label=v+' mm';if(key==='drive'){const n=fractionNumber(v)*8;label=`${v}${Number.isInteger(n)?`（${String(n).padStart(2,'0')}／${n}分）`:''}`}options.set(v,label)}return [...options].sort((a,b)=>{if(['drive','raw_length','raw_diameter'].includes(key))return fractionNumber(a[0])-fractionNumber(b[0]);return collator.compare(a[0],b[0])}).map(([value,label])=>({value,label}))}
+export function selectCatalog<T extends CatalogSpec>(specs:T[],filters:CatalogFilters,query:string,sort:string){const terms=query.trim().toUpperCase().split(/\s+/).filter(Boolean);const rows=specs.filter(s=>Object.entries(filters).every(([k,v])=>!v||filterValue(s.data,k as FilterKey)===v)&&terms.every(term=>[materialCode(s.data),searchCode(s.data),s.code,s.legacy_code,...Object.values(s.data)].join(' ').toUpperCase().includes(term)));
+ if(sort==='newest')return rows;
+ const compareSize=(a:T,b:T)=>{const drive=fractionNumber(a.data.drive)-fractionNumber(b.data.drive);if(drive)return drive;const series=collator.compare(seriesOf(a.data),seriesOf(b.data));if(series)return series;const size=fractionNumber(a.data.size)-fractionNumber(b.data.size);return Number.isFinite(size)&&size?size:collator.compare(a.data.size,b.data.size)};
+ return rows.sort((a,b)=>{const delta=sort==='diameter'?Number(a.data.raw_diameter)-Number(b.data.raw_diameter):sort==='length'?Number(a.data.raw_length)-Number(b.data.raw_length):0;return (sort==='size_desc'?-1:1)*(delta||compareSize(a,b)||collator.compare(materialCode(a.data),materialCode(b.data)))})}
+export type DiameterCondition={op:string;value:string;end:string};
+export const noDiameter:DiameterCondition={op:'all',value:'',end:''};
+export function diameterMatches(raw:string,c:DiameterCondition){if(c.op==='all')return true;const n=Number(raw),v=Number(c.value),end=Number(c.end);if(!c.value.trim()||!Number.isFinite(v)||!Number.isFinite(n))return false;if(c.op==='range')return !!c.end.trim()&&Number.isFinite(end)&&v<=end&&n>=v&&n<=end;return c.op==='gt'?n>v:c.op==='ge'?n>=v:c.op==='lt'?n<v:c.op==='le'?n<=v:n===v}

@@ -1,0 +1,13 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {build} from 'esbuild';
+const r=await build({entryPoints:['app/drawing-library-filter.ts'],bundle:true,platform:'node',format:'esm',write:false});
+const {emptyDrawingLibrary,selectLibraryDrawings}=await import('data:text/javascript;base64,'+Buffer.from(r.outputFiles[0].text).toString('base64'));
+const raw=(id,size,material)=>({id,code:id,data:{size,material,name:'RS-短套',drive:'1/2',profile:'6P',raw_length:'40',raw_diameter:'23.5',style:'一般品'}});
+const specs=[raw('a','M08','6140'),raw('b','M16','50BV30')];
+const data={length:'38',groove:{kind:'none'},ends:{drive:{mode:'unchanged'},work:{mode:'machine',diameter:'15.5'}}};
+const drawings=[{id:'one',customer_id:'c',customer:'金統立',number:'無溝6140',version:'A',spec_ids:['a','b'],data,in_use:0,disabled:0},{id:'two',customer_id:'d',customer:'其他',number:'圓溝',version:'B',spec_ids:['b'],data:{...data,groove:{kind:'round'}},in_use:1,disabled:1}];
+const find=(f,q='',status='all')=>selectLibraryDrawings(drawings,specs,f,q,status).map(d=>d.id);
+test('shared material predicates must match one applicable material; range compares sizes',()=>{const f=emptyDrawingLibrary();f.materials.catalog.material='6140';f.materials.catalog.series='metric';f.materials.sizeMode='range';f.materials.from='M15';f.materials.to='M16';assert.deepEqual(find(f),[]);f.materials.from='M08';assert.deepEqual(find(f),['one'])});
+test('customer, version, usage, groove and status combine, with meaningful specification search',()=>{const f=emptyDrawingLibrary();f.customer='c';f.version='A';f.used='unused';f.groove='none';assert.deepEqual(find(f,'金統立 M08'),['one']);assert.deepEqual(find(f,'','inactive'),[]);assert.deepEqual(find(f,'M23'),[])});
+test('machining end dimensions do not treat unchanged or missing dimensions as zero',()=>{const f=emptyDrawingLibrary();f.part='work';f.workDiameter={op:'eq',value:'15.50',end:''};f.length={op:'range',value:'38',end:'40'};assert.deepEqual(find(f),['one','two']);f.driveDiameter={op:'lt',value:'20',end:''};assert.deepEqual(find(f),[]);f.driveDiameter.op='all';f.workDiameter.value='';assert.deepEqual(find(f),[])});
