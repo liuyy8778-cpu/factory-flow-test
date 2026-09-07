@@ -10,9 +10,12 @@ echo ================================
 echo.
 netstat -ano | findstr /r ":3000 .*LISTENING" >nul
 if not errorlevel 1 (
-  echo 系統還在執行中。請先關閉「啟動」的黑色視窗，再點一次更新。
-  pause
-  exit /b 1
+  echo 系統還在執行中。更新前必須先關閉系統。
+  choice /c YN /m "要我幫你關閉系統嗎？Y=關閉並繼續更新  N=取消"
+  if errorlevel 2 exit /b 1
+  for /f "tokens=5" %%P in ('netstat -ano ^| findstr /r ":3000 .*LISTENING"') do taskkill /pid %%P /t /f >nul 2>nul
+  timeout /t 2 >nul
+  echo 系統已關閉。
 )
 echo 正在下載最新版...
 set ZIP=%TEMP%\factory-flow-update.zip
