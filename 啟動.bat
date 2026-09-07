@@ -38,7 +38,8 @@ if not exist .next\BUILD_ID (
 )
 echo.
 echo 系統啟動中，等一下會自動打開瀏覽器。
-echo 使用期間請不要關閉這個黑色視窗；要關閉系統時，直接關掉這個視窗就好。
+echo 使用期間請不要關閉這個黑色視窗。可以縮到最小。
+echo 要關閉系統時直接關掉這個視窗就好。
 echo.
 start "" cmd /c "timeout /t 5 >nul & start http://localhost:3000"
 call npm run start
