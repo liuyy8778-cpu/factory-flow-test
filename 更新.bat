@@ -8,12 +8,12 @@ echo ================================
 echo   廠務帳 更新到最新版
 echo ================================
 echo.
-netstat -ano | findstr /r ":3000 .*LISTENING" >nul
-if not errorlevel 1 (
+for /f %%P in ('powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"name='node.exe'\" ^| Where-Object { $_.CommandLine -match 'next' } ^| Select-Object -ExpandProperty ProcessId"') do set RUNNING=1
+if defined RUNNING (
   echo 系統還在執行中。更新前必須先關閉系統。
   choice /c YN /m "要我幫你關閉系統嗎？Y=關閉並繼續更新  N=取消"
   if errorlevel 2 exit /b 1
-  for /f "tokens=5" %%P in ('netstat -ano ^| findstr /r ":3000 .*LISTENING"') do taskkill /pid %%P /t /f >nul 2>nul
+  powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"name='node.exe'\" | Where-Object { $_.CommandLine -match 'next' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"
   timeout /t 2 >nul
   echo 系統已關閉。
 )
