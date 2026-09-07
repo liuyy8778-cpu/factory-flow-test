@@ -423,3 +423,17 @@ test('actor audit is atomic and removed allocations can be restored once without
  const current=(await (await safety.GET(new Request('https://factory.example/api/safety',{headers}))).json());assert.ok(!current.trash.some(a=>a.record_id===allocation.id));
  assert.throws(()=>sqlite.prepare('DELETE FROM documents WHERE id=?').run(receipt.id));
 });
+
+test('simplified flow: complete_ship marks the job done, records shortage as defective and ships in one step',async()=>{
+ const so=await post(production,{action:'order',partner_id:'existing',date:'2026-09-05',due:'2026-09-10',product:'簡易套筒',spec:'',quantity:10,unit:'支',price:10,note:''});
+ const job=await post(production,{action:'work_order',order_id:so.id,machine:'',operator:'阿明'});
+ const ship=(quantity,status=200)=>post(production,{action:'complete_ship',id:job.id,date:'2026-09-07',barrels:1,packages:1,package_unit:'桶',quantity,tax_rate:5,note:''},status);
+ await ship(11,400);
+ const shipped=await ship(8);
+ assert.deepEqual({...sqlite.prepare('SELECT status,good,defective,shipped FROM work_orders WHERE id=?').get(job.id)},{status:'completed',good:8,defective:2,shipped:8});
+ assert.deepEqual({...sqlite.prepare('SELECT kind,subtotal,total,barrels FROM documents WHERE id=?').get(shipped.id)},{kind:'out',subtotal:8000,total:8400,barrels:1});
+ assert.equal(sqlite.prepare('SELECT note FROM production_reports WHERE work_order_id=?').get(job.id).note,'出貨即完工');
+ await ship(1,400);
+ const again=await post(production,{action:'complete_ship',request_id:shipped.id,id:job.id,date:'2026-09-07',barrels:1,packages:1,package_unit:'桶',quantity:8,tax_rate:5,note:''});
+ assert.equal(again.id,shipped.id,'retrying the same request is safe');
+});

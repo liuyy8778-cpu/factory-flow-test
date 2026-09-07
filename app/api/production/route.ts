@@ -103,6 +103,32 @@ export async function POST(req: Request) {
         db.prepare('UPDATE work_orders SET shipped=shipped+? WHERE id=? AND EXISTS(SELECT 1 FROM documents WHERE id=?)').bind(p.quantity,p.id,id),...barrelStatements(id,job.partner_id,p.date,p.barrels,'out')
       ]);
       if(!await db.prepare('SELECT id FROM documents WHERE id=?').bind(id).first()) throw Error('工單須已完工，且出貨數量不可超過尚未出貨良品');
+    } else if(b.action === 'complete_ship') {
+      // 簡易流程：出貨即完工。出貨數量 = 最終良品數，派工數量減出貨數的差額記為不良／短少。
+      const p=z.object({id:text,date:day,barrels:count.default(0),packages:count.default(0),package_unit:z.enum(['包','桶']).default('包'),quantity:count.refine(v=>v>0),tax_rate:z.number().min(0).max(100),note:optionalText}).parse(b);
+      if(await db.prepare('SELECT id FROM documents WHERE id=?').bind(id).first()) return Response.json({ok:true,id});
+      const job=await db.prepare(`SELECT w.*,s.partner_id,s.product,s.spec,s.unit,s.price,s.quantity AS order_quantity FROM work_orders w JOIN sales_orders s ON s.id=w.order_id WHERE w.id=?`).bind(p.id).first<Record<string,any>>();
+      if(!job) throw Error('找不到工單');
+      if(job.status==='completed') throw Error('這張工單已完工，請改用「轉出貨單」');
+      if(job.shipped+p.quantity>job.order_quantity) throw Error('出貨數量不可超過派工數量減已出貨數');
+      const subtotal=p.quantity*job.price;
+      const tax=Math.round(subtotal*p.tax_rate/100);
+      if(!Number.isSafeInteger(subtotal+tax)||subtotal+tax>1e14) throw Error('金額超出可記錄範圍');
+      const lines=JSON.stringify([{name:job.product,spec:job.spec,qty:p.quantity,unit:job.unit,packages:p.packages,package_unit:p.package_unit,price:job.price/100}]);
+      const reportId=id+':complete';
+      await db.batch([
+        db.prepare(`INSERT INTO production_reports (id,work_order_id,reported_at,operator,good,defective,note)
+          SELECT ?,w.id,?,w.operator,?,s.quantity-w.shipped-?,'出貨即完工' FROM work_orders w JOIN sales_orders s ON s.id=w.order_id
+          WHERE w.id=? AND w.status IN ('pending','running','paused') AND w.shipped+?<=s.quantity`)
+          .bind(reportId,stamp,p.quantity,p.quantity,p.id,p.quantity),
+        db.prepare(`UPDATE work_orders SET good=shipped+?,defective=(SELECT quantity FROM sales_orders WHERE id=work_orders.order_id)-shipped-?,status='completed',started_at=COALESCE(started_at,?),completed_at=? WHERE id=? AND EXISTS(SELECT 1 FROM production_reports WHERE id=?)`)
+          .bind(p.quantity,p.quantity,stamp,stamp,p.id,reportId),
+        db.prepare(`INSERT INTO documents (id,number,kind,partner_id,date,lines,subtotal,tax,total,note,work_order_id,customer_id,barrels)
+          SELECT ?,?,'out',?,?,?,?,?,?,?,id,?,? FROM work_orders WHERE id=? AND status='completed' AND shipped+?<=good`)
+          .bind(id,number('OUT'),job.partner_id,p.date,lines,subtotal,tax,subtotal+tax,p.note,job.partner_id,p.barrels,p.id,p.quantity),
+        db.prepare('UPDATE work_orders SET shipped=shipped+? WHERE id=? AND EXISTS(SELECT 1 FROM documents WHERE id=?)').bind(p.quantity,p.id,id),...barrelStatements(id,job.partner_id,p.date,p.barrels,'out')
+      ]);
+      if(!await db.prepare('SELECT id FROM documents WHERE id=?').bind(id).first()) throw Error('工單狀態已改變，或出貨數量超過派工數量，請重新整理');
     } else throw Error('不支援此操作');
     return Response.json({ok:true,id:resultId});
   } catch(e) {

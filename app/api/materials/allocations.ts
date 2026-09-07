@@ -37,13 +37,14 @@ export async function allocationAction(b:Record<string,any>,req:Request){
  const p=z.object({id:text}).parse(b);const r=await db.prepare('DELETE FROM intake_allocations WHERE id=? AND NOT EXISTS(SELECT 1 FROM work_orders WHERE allocation_id=?)').bind(p.id,p.id).run();if(!r.meta.changes)throw Error('此分配已派工或已移除，請重新整理');return {ok:true,id};
  }
  if(b.action==='dispatch_allocation'){
- const p=z.object({id:text,machine:text,operator:text}).parse(b);
+ // 簡易流程：start=true 時派工即開工（status=running），機台可留空。
+ const p=z.object({id:text,machine:z.string().trim().max(200).default(''),operator:text,start:z.boolean().default(false)}).parse(b);
  const existing=await db.prepare('SELECT id FROM work_orders WHERE allocation_id=?').bind(p.id).first<any>();if(existing)return {ok:true,id:existing.id};
  const a=await db.prepare('SELECT a.*,i.customer_id,i.material_snapshot,i.document_id,d.date FROM intake_allocations a JOIN intakes i ON i.id=a.intake_id JOIN documents d ON d.id=i.document_id WHERE a.id=? AND d.voided=0').bind(p.id).first<any>();if(!a)throw Error('找不到可派工的分配');
  const raw=JSON.parse(a.material_snapshot),dr=JSON.parse(a.drawing_snapshot);if(!drawingReady(dr))throw Error('圖面兩端尚待確認，不能派工');
  await db.batch([
  db.prepare(`INSERT INTO sales_orders(id,number,partner_id,date,due,product,spec,quantity,unit,price,note) SELECT ?,?,?,?,?,?,?,?,'支',?,? WHERE EXISTS(SELECT 1 FROM intake_allocations a JOIN intakes i ON i.id=a.intake_id JOIN documents d ON d.id=i.document_id WHERE a.id=? AND d.voided=0) AND NOT EXISTS(SELECT 1 FROM work_orders WHERE allocation_id=?)`).bind(id,`SRC-${id}`,a.customer_id,a.date,a.due,raw.name,`${raw.drive} × ${raw.size} × ${raw.profile} · ${drawingSummary(dr)}`,a.quantity,a.fee,`圖號 ${dr.number} / ${dr.version}；${dr.note||''}`,a.id,a.id),
- db.prepare(`INSERT INTO work_orders(id,number,order_id,machine,operator,status,good,defective,shipped,intake_id,allocation_id) SELECT ?,?,?,?,?, 'pending',0,0,0,?,? WHERE EXISTS(SELECT 1 FROM sales_orders WHERE id=?)`).bind(id,`WO-${stampTaipei()}-${id.slice(0,8).toUpperCase()}`,id,p.machine,p.operator,a.intake_id,a.id,id),
+ db.prepare(`INSERT INTO work_orders(id,number,order_id,machine,operator,status,started_at,good,defective,shipped,intake_id,allocation_id) SELECT ?,?,?,?,?,?,?,0,0,0,?,? WHERE EXISTS(SELECT 1 FROM sales_orders WHERE id=?)`).bind(id,`WO-${stampTaipei()}-${id.slice(0,8).toUpperCase()}`,id,p.machine,p.operator,p.start?'running':'pending',p.start?stamp:null,a.intake_id,a.id,id),
  db.prepare('UPDATE intakes SET dispatched=1 WHERE id=? AND EXISTS(SELECT 1 FROM work_orders WHERE id=?)').bind(a.intake_id,id)]);
  if(!await db.prepare('SELECT id FROM work_orders WHERE id=?').bind(id).first())throw Error('分配已變更，請重新整理');return {ok:true,id};
  }

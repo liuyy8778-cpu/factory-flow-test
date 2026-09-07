@@ -148,3 +148,22 @@ body{font-family:Inter,"Noto Sans TC","Microsoft JhengHei",Arial,sans-serif;font
 .operator-hint{font-size:12px!important;color:#8a97a5!important}
 .operator-badge{display:block;font-size:12px;color:#196956;text-decoration:none;margin-top:2px}
 .operator-badge:hover{text-decoration:underline}
+
+/* 簡易版：今日看板與側欄進階區 */
+.today-board-wrap{display:flex;flex-direction:column;gap:18px;margin-bottom:26px}
+.today-board{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.today-card{position:relative;background:#fff;border:1px solid #e1e7e9;border-radius:10px;padding:20px 22px;text-align:left;box-shadow:0 2px 4px #233a4410;transition:150ms}
+.today-card:hover{border-color:#76a091;transform:translateY(-2px)}
+.today-card-head{display:flex;align-items:center;justify-content:space-between;font-size:14px;color:#687983}
+.today-card-head svg{color:#7c9290}
+.today-card b{display:block;font-size:32px;font-weight:650;color:#9aa6ad;margin:16px 0 10px;line-height:1.2;font-variant-numeric:tabular-nums}
+.today-card b small{display:inline;font-size:13px;font-weight:400;margin-left:8px;color:#8a979e}
+.today-card.has-items b{color:#285447}
+.today-card.orange.has-items b{color:#b57932}
+.today-card.orange.has-items{border-color:#e6c79a;background:#fffaf2}
+.today-card p{font-size:12px;color:#869199;display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0}
+.today-flow{padding-top:6px}
+.nav-more{display:flex;align-items:center;gap:8px;width:100%;background:none;border:0;color:#8ba3a4;font-size:12px;letter-spacing:2px;padding:18px 14px 10px;text-align:left}
+.nav-more:hover{color:#c4e7a6}
+@media(max-width:1000px){.today-board{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:767px){.today-board{grid-template-columns:1fr 1fr;gap:10px}.today-card{padding:14px}.today-card b{font-size:26px;margin:12px 0 8px}.today-card p svg{display:none}}
