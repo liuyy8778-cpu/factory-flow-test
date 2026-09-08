@@ -20,12 +20,12 @@ test('open database applies every migration once, including triggers', () => {
     const db = openDatabase(join(dir, 'nested', 'factory.db'));
     const tables = db.sqlite.prepare("SELECT count(*) AS n FROM sqlite_master WHERE type='table' AND substr(name,1,2)<>'__'").get().n;
     const triggers = db.sqlite.prepare("SELECT count(*) AS n FROM sqlite_master WHERE type='trigger'").get().n;
-    assert.equal(tables, 21);
-    assert.equal(triggers, 60);
-    assert.equal(db.sqlite.prepare('SELECT count(*) AS n FROM __migrations').get().n, 12);
+    assert.equal(tables, 23);
+    assert.equal(triggers, 66);
+    assert.equal(db.sqlite.prepare('SELECT count(*) AS n FROM __migrations').get().n, 13);
     db.close();
     const again = openDatabase(join(dir, 'nested', 'factory.db'));
-    assert.equal(again.sqlite.prepare('SELECT count(*) AS n FROM __migrations').get().n, 12);
+    assert.equal(again.sqlite.prepare('SELECT count(*) AS n FROM __migrations').get().n, 13);
     again.close();
     assert.ok(existsSync(join(dir, 'nested', 'factory.db')));
   } finally {
@@ -42,7 +42,7 @@ test('a database restored by backup-restore.mjs (no __migrations table) is adopt
     raw.exec("INSERT INTO partners (id,name,kind,contact,phone,tax_id,address) VALUES ('p','還原客戶','customer','','','','')");
     raw.close();
     const db = openDatabase(join(dir, 'factory.db'));
-    assert.equal(db.sqlite.prepare('SELECT count(*) AS n FROM __migrations').get().n, 12);
+    assert.equal(db.sqlite.prepare('SELECT count(*) AS n FROM __migrations').get().n, 13);
     assert.equal(db.sqlite.prepare('SELECT name FROM partners').get().name, '還原客戶');
     db.close();
   } finally {

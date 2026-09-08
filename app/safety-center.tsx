@@ -6,7 +6,7 @@ import {Dialog,DialogContent,DialogTitle,DialogDescription} from '@/components/u
 import {verifyBackup} from './backup-format';
 import {toast} from 'sonner';
 type Row=Record<string,any>;
-const names:Record<string,string>={partners:'往來廠商',documents:'進出貨單',invoices:'請款單',payments:'收款',sales_orders:'訂單',work_orders:'工單',production_reports:'報工',material_specs:'來料規格',drawings:'加工圖面',drawing_specs:'圖面適用料',intakes:'進貨明細',intake_allocations:'加工分配',barrel_entries:'鐵桶帳'};
+const names:Record<string,string>={partners:'往來廠商',documents:'進出貨單',invoices:'請款單',payments:'收款',sales_orders:'訂單',work_orders:'工單',production_reports:'報工',material_specs:'來料規格',drawings:'加工圖面',drawing_specs:'圖面適用料',intakes:'進貨明細',intake_allocations:'加工分配',barrel_entries:'鐵桶帳',series_drawings:'系列圖面',series_drawing_rows:'系列圖面尺寸列'};
 const when=(s:string)=>new Date(s).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'});
 export default function SafetyCenter(){
  const [busy,setBusy]=useState(false),[result,setResult]=useState<Row|null>(null),[data,setData]=useState<{audit:Row[];trash:Row[]}>({audit:[],trash:[]}),[error,setError]=useState(''),[restore,setRestore]=useState<Row|null>(null),[reason,setReason]=useState('');

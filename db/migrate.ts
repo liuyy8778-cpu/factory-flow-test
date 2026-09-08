@@ -26,10 +26,19 @@ export function migrate(sqlite: Database.Database, migrations = listMigrations()
   const hasSchema = !!sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='documents'").get();
   if (!done.size && hasSchema) {
     const baseline = migrations.findIndex((m) => m.tag === RESTORED_BASELINE);
+    const tableExists = (name: string) => !!sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name);
     sqlite.transaction(() => {
       for (const m of migrations.slice(0, baseline + 1)) {
         insert.run(m.tag, new Date().toISOString());
         done.add(m.tag);
+      }
+      // 基準之後的 migration：它建的資料表若都已存在，也視為已套用（例如整套 SQL 直接跑過的資料庫）。
+      for (const m of migrations.slice(baseline + 1)) {
+        const created = [...m.sql.matchAll(/CREATE TABLE `([^`]+)`/g)].map((x) => x[1]);
+        if (created.length && created.every(tableExists)) {
+          insert.run(m.tag, new Date().toISOString());
+          done.add(m.tag);
+        } else break;
       }
     })();
   }

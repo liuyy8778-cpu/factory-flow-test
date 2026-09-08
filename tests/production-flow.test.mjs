@@ -22,6 +22,7 @@ const materials=await api('app/api/materials/route.ts');
 const drawingFile=await api('app/api/drawing-file/route.ts');
 const production=await api('app/api/production/route.ts');
 const accounting=await api('app/api/data/route.ts');
+const series=await api('app/api/series/route.ts');
 async function post(handler,payload,status=200){const original=console.error;if(status!==200)console.error=()=>{};try{const r=await handler.POST(new Request('https://factory.example/api',{method:'POST',headers:{'Content-Type':'application/json',origin:'https://factory.example'},body:JSON.stringify({request_id:crypto.randomUUID(),...payload})}));const b=await r.json();assert.equal(r.status,status,JSON.stringify(b));return b}finally{console.error=original}}
 test('order → dispatch → reporting → partial shipping → invoice → settlement, with guards and safe retries',async()=>{
  assert.equal(sqlite.prepare('SELECT note FROM documents WHERE id=?').get('existing-document').note,'原始單據');
@@ -436,4 +437,33 @@ test('simplified flow: complete_ship marks the job done, records shortage as def
  await ship(1,400);
  const again=await post(production,{action:'complete_ship',request_id:shipped.id,id:job.id,date:'2026-09-07',barrels:1,packages:1,package_unit:'桶',quantity:8,tax_rate:5,note:''});
  assert.equal(again.id,shipped.id,'retrying the same request is safe');
+});
+
+test('series drawing: one pasted table generates a standard drawing per size, shared across profiles, with guards',async()=>{
+ const spec=(size,profile,raw_diameter='22')=>post(materials,{action:'spec',data:{material:'S45C',name:'RS-短套',drive:'1/2',size,profile,raw_length:'40',raw_diameter,style:'棒材'}});
+ const m10a=await spec('M10','6p'),m10b=await spec('M10','12p');
+ const rows=[{size:'10',style:'A',turn_end:'work',turn_diameter:'15.0',step_length:'20',total_length:'38',groove_gap:'',thread_depth:'8',note:''},{size:'20',style:'B',turn_end:'drive',turn_diameter:'23.2',step_length:'17',total_length:'38',groove_gap:'2',thread_depth:'17',note:''}];
+ const head={action:'create',customer_id:'existing',number:'無溝6140',version:'A',name:'1/2" 手動套筒',material:'6140',drive:'1/2',drawing_date:'2022-05-31',note:''};
+ const created=await post(series,{...head,rows});
+ assert.equal(created.created,1,'only size 10 has a material spec yet');
+ assert.equal(created.warnings.length,1);
+ const d=sqlite.prepare('SELECT * FROM drawings WHERE id=?').get(created.id+':0');
+ assert.equal(d.preferred,1);assert.equal(d.number,'無溝6140');
+ const linked=[d.spec_id,...sqlite.prepare('SELECT spec_id FROM drawing_specs WHERE drawing_id=?').all(created.id+':0').map(x=>x.spec_id)];
+ assert.ok(linked.includes(m10a.id)&&linked.includes(m10b.id),'6p and 12p of the same size share one drawing');
+ const data=JSON.parse(d.data);
+ assert.equal(data.series.size,'10');assert.equal(data.ends.work.diameter,'15.0');assert.equal(data.ends.work.cut_length,'18');assert.equal(data.ends.drive.mode,'unchanged');assert.equal(data.groove.kind,'none');assert.equal(data.length,'38');
+ assert.equal(sqlite.prepare('SELECT drawing_id FROM series_drawing_rows WHERE series_id=? AND position=1').get(created.id).drawing_id,null);
+ const listed=await (await series.GET()).json();
+ assert.equal(listed.series[0].rows.length,2);
+ await spec('M20','6p','30');
+ const again=await post(series,{action:'regenerate',id:created.id});
+ assert.equal(again.created,1);
+ const d20=JSON.parse(sqlite.prepare('SELECT data FROM drawings WHERE id=?').get(created.id+':1').data);
+ assert.equal(d20.ends.drive.diameter,'23.2');assert.equal(d20.ends.drive.cut_length,'17');assert.equal(d20.groove.kind,'custom');assert.equal(d20.series.groove_gap,'2');
+ await post(series,{...head,rows},400);
+ const tooLong=await post(series,{...head,version:'B',rows:[{...rows[0],total_length:'45'}]},400);
+ assert.match(tooLong.error,/總長/);
+ const tooWide=await post(series,{...head,version:'B',rows:[{...rows[0],turn_diameter:'25'}]},400);
+ assert.match(tooWide.error,/外徑/);
 });

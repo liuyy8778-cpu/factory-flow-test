@@ -85,6 +85,13 @@
       "when": 1788698954924,
       "tag": "0011_lively_slipstream",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1788878082096,
+      "tag": "0012_series_drawings",
+      "breakpoints": true
     }
   ]
 }

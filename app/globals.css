@@ -167,3 +167,15 @@ body{font-family:Inter,"Noto Sans TC","Microsoft JhengHei",Arial,sans-serif;font
 .nav-more:hover{color:#c4e7a6}
 @media(max-width:1000px){.today-board{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:767px){.today-board{grid-template-columns:1fr 1fr;gap:10px}.today-card{padding:14px}.today-card b{font-size:26px;margin:12px 0 8px}.today-card p svg{display:none}}
+
+/* 系列圖面 */
+.series-dialog{max-width:1400px!important}
+.series-head{grid-template-columns:repeat(4,minmax(0,1fr))}
+.series-head .field-wide{grid-column:1/-1}
+.series-paste{width:100%;border:1px solid #cfd6de;border-radius:8px;padding:10px 12px;font-size:14px;font-family:ui-monospace,Consolas,monospace;background:#fff}
+.series-table [data-slot=table-container]{max-height:45dvh;overflow:auto}
+.series-table table{min-width:1100px}
+.series-table td{padding-top:8px!important;padding-bottom:8px!important}
+.series-table input{height:36px;font-size:14px}
+.series-table th:nth-child(3){width:170px}
+@media(max-width:850px){.series-head{grid-template-columns:1fr 1fr}}
