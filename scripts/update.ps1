@@ -59,4 +59,7 @@ if ($LASTEXITCODE -ne 0) { throw 'npm install 失敗，請截圖給我' }
 & npm run build
 if ($LASTEXITCODE -ne 0) { throw '建置失敗，請截圖給我' }
 Write-Host ''
-Write-Host '更新完成。現在可以點「啟動」了。'
+Write-Host '================================'
+if ($ver) { Write-Host ('更新完成：現在是 V{0} · {1}，已換上 {2} 個項目。' -f $ver.Matches[0].Groups[1].Value, $ver.Matches[0].Groups[2].Value, $count) } else { Write-Host '更新完成。' }
+Write-Host '現在可以點「啟動」了。'
+Write-Host '================================'
